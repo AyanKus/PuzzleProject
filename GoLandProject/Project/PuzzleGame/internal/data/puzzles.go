@@ -2,6 +2,7 @@ package data
 
 import (
 	"Puzzle.Ayan.net/internal/validator"
+	"context"
 	"database/sql"
 	"errors"
 	"github.com/lib/pq"
@@ -38,8 +39,11 @@ func (m PuzzleModel) Insert(puzzle *Puzzle) error {
 		VALUES ($1, $2, $3)
 		RETURNING id, created_at, version`
 	args := []interface{}{puzzle.Title, puzzle.NumOfPuzzles, pq.Array(puzzle.Genres)}
-	return m.DB.QueryRow(query, args...).Scan(&puzzle.ID, &puzzle.CreatedAt, &puzzle.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	return m.DB.QueryRowContext(ctx, query, args...).Scan(&puzzle.ID, &puzzle.CreatedAt, &puzzle.Version)
 }
+
 func (m PuzzleModel) Get(id int64) (*Puzzle, error) {
 	if id < 1 {
 		return nil, ErrRecordNotFound
@@ -49,7 +53,9 @@ func (m PuzzleModel) Get(id int64) (*Puzzle, error) {
 		FROM puzzles
 		WHERE id = $1`
 	var puzzle Puzzle
-	err := m.DB.QueryRow(query, id).Scan(
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
 		&puzzle.ID,
 		&puzzle.CreatedAt,
 		&puzzle.Title,
@@ -72,15 +78,27 @@ func (m PuzzleModel) Update(puzzle *Puzzle) error {
 	query := `
 		UPDATE puzzles
 		SET title = $1, numOfPuzzles = $2, genres = $3, version = version + 1
-		WHERE id = $4
+		WHERE id = $4 AND version = $5
 		RETURNING version`
 	args := []interface{}{
 		puzzle.Title,
 		puzzle.NumOfPuzzles,
 		pq.Array(puzzle.Genres),
 		puzzle.ID,
+		puzzle.Version,
 	}
-	return m.DB.QueryRow(query, args...).Scan(&puzzle.Version)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&puzzle.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+	return nil
 }
 
 func (m PuzzleModel) Delete(id int64) error {
@@ -90,10 +108,13 @@ func (m PuzzleModel) Delete(id int64) error {
 	query := `
 		DELETE FROM puzzles
 		WHERE id = $1`
-	result, err := m.DB.Exec(query, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	result, err := m.DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return err

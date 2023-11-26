@@ -105,18 +105,24 @@ func (app *application) updatePuzzleHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	var input struct {
-		Title        string   `json:"title"`
-		NumOfPuzzles data.NOP `json:"num_of_puzzles"`
-		Genres       []string `json:"genres"`
+		Title        *string   `json:"title"`
+		NumOfPuzzles *data.NOP `json:"num_of_puzzles"`
+		Genres       []string  `json:"genres"`
 	}
 	err = app.readJSON(w, r, &input)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
-	puzzle.Title = input.Title
-	puzzle.NumOfPuzzles = input.NumOfPuzzles
-	puzzle.Genres = input.Genres
+	if input.Title != nil {
+		puzzle.Title = *input.Title
+	}
+	if input.NumOfPuzzles != nil {
+		puzzle.NumOfPuzzles = *input.NumOfPuzzles
+	}
+	if input.Genres != nil {
+		puzzle.Genres = input.Genres
+	}
 	v := validator.New()
 	if data.ValidateMovie(v, puzzle); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
@@ -124,7 +130,12 @@ func (app *application) updatePuzzleHandler(w http.ResponseWriter, r *http.Reque
 	}
 	err = app.models.Puzzles.Update(puzzle)
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
+		switch {
+		case errors.Is(err, data.ErrEditConflict):
+			app.editConflictResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
 		return
 	}
 	err = app.writeJSON(w, http.StatusOK, envelope{"puzzle": puzzle}, nil)

@@ -12,7 +12,7 @@ func (app *application) routes() *httprouter.Router {
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/puzzles", app.createPuzzleHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/puzzles/:id", app.showPuzzleHandler)
-	router.HandlerFunc(http.MethodPut, "/v1/puzzles/:id", app.updatePuzzleHandler)
+	router.HandlerFunc(http.MethodPatch, "/v1/puzzles/:id", app.updatePuzzleHandler)
 	router.HandlerFunc(http.MethodDelete, "/v1/puzzles/:id", app.deletePuzzleHandler)
 	return router
 }
