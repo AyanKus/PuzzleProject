@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/lib/pq"
 	"time"
 )
@@ -123,4 +124,46 @@ func (m PuzzleModel) Delete(id int64) error {
 		return ErrRecordNotFound
 	}
 	return nil
+}
+
+func (m PuzzleModel) GetAll(title string, genres []string, filters Filters) ([]*Puzzle, Metadata, error) {
+	query := fmt.Sprintf(`
+		SELECT id, created_at, title, numOfPuzzles, genres, version
+		FROM puzzles
+		WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
+		AND (genres @> $2 OR $2 = '{}')
+		ORDER BY %s %s, id ASC
+		LIMIT $3 OFFSET $4`, filters.sortColumn(), filters.sortDirection())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	args := []interface{}{title, pq.Array(genres), filters.limit(), filters.offset()}
+	rows, err := m.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, Metadata{}, err
+	}
+	defer rows.Close()
+	totalRecords := 0
+	puzzles := []*Puzzle{}
+	for rows.Next() {
+		var puzzle Puzzle
+		err := rows.Scan(
+			&totalRecords,
+			&puzzle.ID,
+			&puzzle.CreatedAt,
+			&puzzle.Title,
+			&puzzle.NumOfPuzzles,
+			pq.Array(&puzzle.Genres),
+			&puzzle.Version,
+		)
+		if err != nil {
+			return nil, Metadata{}, err
+		}
+		puzzles = append(puzzles, &puzzle)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+	}
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+	return puzzles, metadata, nil
 }

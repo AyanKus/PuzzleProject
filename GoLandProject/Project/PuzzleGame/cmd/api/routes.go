@@ -10,6 +10,7 @@ func (app *application) routes() *httprouter.Router {
 	router.NotFound = http.HandlerFunc(app.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/puzzles", app.listPuzzlesHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/puzzles", app.createPuzzleHandler)
 	router.HandlerFunc(http.MethodGet, "/v1/puzzles/:id", app.showPuzzleHandler)
 	router.HandlerFunc(http.MethodPatch, "/v1/puzzles/:id", app.updatePuzzleHandler)
