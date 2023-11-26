@@ -2,6 +2,9 @@ package data
 
 import (
 	"Puzzle.Ayan.net/internal/validator"
+	"database/sql"
+	"errors"
+	"github.com/lib/pq"
 	"time"
 )
 
@@ -23,4 +26,51 @@ func ValidateMovie(v *validator.Validator, puzzle *Puzzle) {
 	v.Check(len(puzzle.Genres) >= 1, "genres", "must contain at least 1 genre")
 	v.Check(len(puzzle.Genres) <= 5, "genres", "must not contain more than 5 genres")
 	v.Check(validator.Unique(puzzle.Genres), "genres", "must not contain duplicate values")
+}
+
+type PuzzleModel struct {
+	DB *sql.DB
+}
+
+func (m PuzzleModel) Insert(puzzle *Puzzle) error {
+	query := `
+		INSERT INTO puzzles (title, NumOfPuzzles, genres)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at, version`
+	args := []interface{}{puzzle.Title, puzzle.NumOfPuzzles, pq.Array(puzzle.Genres)}
+	return m.DB.QueryRow(query, args...).Scan(&puzzle.ID, &puzzle.CreatedAt, &puzzle.Version)
+}
+func (m PuzzleModel) Get(id int64) (*Puzzle, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+	query := `
+		SELECT id, created_at, title, year, runtime, genres, version
+		FROM movies
+		WHERE id = $1`
+	var puzzle Puzzle
+	err := m.DB.QueryRow(query, id).Scan(
+		&puzzle.ID,
+		&puzzle.CreatedAt,
+		&puzzle.Title,
+		&puzzle.NumOfPuzzles,
+		pq.Array(&puzzle.Genres),
+		&puzzle.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &puzzle, nil
+}
+
+func (m PuzzleModel) Update(puzzle *Puzzle) error {
+	return nil
+}
+func (m PuzzleModel) Delete(id int64) error {
+	return nil
 }
