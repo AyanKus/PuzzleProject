@@ -45,8 +45,8 @@ func (m PuzzleModel) Get(id int64) (*Puzzle, error) {
 		return nil, ErrRecordNotFound
 	}
 	query := `
-		SELECT id, created_at, title, year, runtime, genres, version
-		FROM movies
+		SELECT id, created_at, numOfPuzzles, genres, version
+		FROM puzzles
 		WHERE id = $1`
 	var puzzle Puzzle
 	err := m.DB.QueryRow(query, id).Scan(
@@ -69,8 +69,37 @@ func (m PuzzleModel) Get(id int64) (*Puzzle, error) {
 }
 
 func (m PuzzleModel) Update(puzzle *Puzzle) error {
-	return nil
+	query := `
+		UPDATE puzzles
+		SET title = $1, numOfPuzzles = $2, genres = $3, version = version + 1
+		WHERE id = $4
+		RETURNING version`
+	args := []interface{}{
+		puzzle.Title,
+		puzzle.NumOfPuzzles,
+		pq.Array(puzzle.Genres),
+		puzzle.ID,
+	}
+	return m.DB.QueryRow(query, args...).Scan(&puzzle.Version)
 }
+
 func (m PuzzleModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
+	}
+	query := `
+		DELETE FROM puzzles
+		WHERE id = $1`
+	result, err := m.DB.Exec(query, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
 	return nil
 }

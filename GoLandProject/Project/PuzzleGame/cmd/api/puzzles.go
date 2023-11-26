@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 func (app *application) createPuzzleHandler(w http.ResponseWriter, r *http.Request) {
@@ -25,12 +26,13 @@ func (app *application) createPuzzleHandler(w http.ResponseWriter, r *http.Reque
 		NumOfPuzzles: input.NumOfPuzzles,
 		Genres:       input.Genres,
 	}
+
 	v := validator.New()
 	if data.ValidateMovie(v, puzzle); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
-	fmt.Fprintf(w, "%+v\n", input)
+
 	err = app.models.Puzzles.Insert(puzzle)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
@@ -50,7 +52,7 @@ func (app *application) showPuzzleHandler(w http.ResponseWriter, r *http.Request
 		http.NotFound(w, r)
 		return
 	}
-	game, err := app.models.Puzzles.Get(id)
+	puzzle, err := app.models.Puzzles.Get(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
@@ -60,12 +62,31 @@ func (app *application) showPuzzleHandler(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"game": game}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"puzzle": puzzle}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 }
 
+func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+	movie := data.Puzzle{
+		ID:           id,
+		CreatedAt:    time.Now(),
+		Title:        "Casablanca",
+		NumOfPuzzles: 102,
+		Genres:       []string{"drama", "romance", "war"},
+		Version:      1,
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{"movie": movie}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
 func (app *application) updatePuzzleHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
@@ -82,6 +103,7 @@ func (app *application) updatePuzzleHandler(w http.ResponseWriter, r *http.Reque
 		}
 		return
 	}
+
 	var input struct {
 		Title        string   `json:"title"`
 		NumOfPuzzles data.NOP `json:"num_of_puzzles"`
@@ -92,15 +114,9 @@ func (app *application) updatePuzzleHandler(w http.ResponseWriter, r *http.Reque
 		app.badRequestResponse(w, r, err)
 		return
 	}
-	if input.Title != nil {
-		puzzle.Title = *input.Title
-	}
-	if input.NumOfPuzzles != nil {
-		puzzle.NumOfPuzzles = *input.NumOfPuzzles
-	}
-	if input.Genres != nil {
-		puzzle.Genres = input.Genres
-	}
+	puzzle.Title = input.Title
+	puzzle.NumOfPuzzles = input.NumOfPuzzles
+	puzzle.Genres = input.Genres
 	v := validator.New()
 	if data.ValidateMovie(v, puzzle); !v.Valid() {
 		app.failedValidationResponse(w, r, v.Errors)
@@ -108,22 +124,16 @@ func (app *application) updatePuzzleHandler(w http.ResponseWriter, r *http.Reque
 	}
 	err = app.models.Puzzles.Update(puzzle)
 	if err != nil {
-		switch {
-		case errors.Is(err, data.ErrEditConflict):
-			app.editConflictResponse(w, r)
-		default:
-			app.serverErrorResponse(w, r, err)
-		}
+		app.serverErrorResponse(w, r, err)
 		return
 	}
-
 	err = app.writeJSON(w, http.StatusOK, envelope{"puzzle": puzzle}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 }
 
-func (app *application) deleteGameHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) deletePuzzleHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
@@ -139,36 +149,7 @@ func (app *application) deleteGameHandler(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"message": "game successfully deleted"}, nil)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-	}
-}
-
-func (app *application) listGamesHandler(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Title string
-		Games []string
-		data.Filters
-	}
-	v := validator.New()
-	qs := r.URL.Query()
-	input.Title = app.readString(qs, "title", "")
-	input.Games = app.readCSV(qs, "games", []string{})
-	input.Page = app.readInt(qs, "page", 1, v)
-	input.PageSize = app.readInt(qs, "page_size", 20, v)
-	input.Sort = app.readString(qs, "sort", "id")
-	input.Filters.SortSafelist = []string{"id", "title", "score", "-id", "-title", "-score"}
-	if data.ValidateFilters(v, input.Filters); !v.Valid() {
-		app.failedValidationResponse(w, r, v.Errors)
-		return
-	}
-	games, metadata, err := app.models.Puzzles.GetAll(input.Title, input.Games, input.Filters)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-	err = app.writeJSON(w, http.StatusOK, envelope{"games": games, "metadata": metadata}, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "movie successfully deleted"}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
