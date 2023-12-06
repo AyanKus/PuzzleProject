@@ -12,12 +12,14 @@ var (
 
 type Models struct {
 	Puzzles PuzzleModel
+	Tokens  TokenModel
 	Users   UserModel
 }
 
 func NewModels(db *sql.DB) Models {
 	return Models{
 		Puzzles: PuzzleModel{DB: db},
+		Tokens:  TokenModel{DB: db},
 		Users:   UserModel{DB: db},
 	}
 }
